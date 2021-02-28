@@ -87,6 +87,12 @@
     <Compile Include="Assets\MyScripts\LoadSkybox.cs" />
     <Compile Include="Assets\NOLOController\Scripts\NOLOControllerAnimator.cs" />
     <Compile Include="Assets\NOLOController\Scripts\NOLOTouchPad.cs" />
+    <Compile Include="Assets\SDKDemo\Scripts\Broad.cs" />
+    <Compile Include="Assets\SDKDemo\Scripts\Click.cs" />
+    <Compile Include="Assets\SDKDemo\Scripts\EnterLeave.cs" />
+    <Compile Include="Assets\SDKDemo\Scripts\HVRDemo.cs" />
+    <Compile Include="Assets\SDKDemo\Scripts\Move.cs" />
+    <Compile Include="Assets\SDKDemo\Scripts\drag.cs" />
     <None Include="Assets\HVR\Resources\Shaders\HVRVolume.shader" />
     <None Include="Assets\HVR\Resources\Shaders\HVRPerformance.shader" />
     <None Include="Assets\HVRController\Shaders\HVR_RBG.shader" />
