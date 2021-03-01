@@ -25,6 +25,9 @@ public class LoadSkybox : MonoBehaviour
     float lastAngle = 0.0f;
     float speed = 0.0f;
     Queue q;
+    float qLast;
+    int direction;
+    bool turnBack = false;
     const int qLength = 10;
     // method 0: simple version(1x)
     // method 1: 2x
@@ -54,6 +57,7 @@ public class LoadSkybox : MonoBehaviour
         for (int i = 0; i < qLength; ++i)
         {
             q.Enqueue(0.0f);
+            qLast = 0.0f;
         }
 
         IControllerHandle controllerHandle = HvrApi.GetControllerHandle();
@@ -163,17 +167,17 @@ public class LoadSkybox : MonoBehaviour
         if (Mathf.Abs(offset) < 0.5f)
         {
             color = new Color((offset * 2.0f), 1.0f, 0.0f);
-            Debug.Log("offset " + offset + " ycolor " + (offset * 2.0f));
+           // Debug.Log("offset " + offset + " ycolor " + (offset * 2.0f));
         }
         else if(offset < 0)
         {
             color = new Color(1.0f, (1.0f - (Mathf.Abs(offset) - 0.5f) * 2.0f), 0.0f);
-            Debug.Log("offset " + offset + " rcolor " + (255.0 - (offset - 0.5f) * 255.0f * 2.0f));
+          //  Debug.Log("offset " + offset + " rcolor " + (255.0 - (offset - 0.5f) * 255.0f * 2.0f));
         } 
         else
         {
             color = new Color(1.0f, (1.0f - (Mathf.Abs(offset) - 0.5f) * 2.0f), (offset * 2.0f));
-            Debug.Log("offset " + offset + " rcolor " + (255.0 - (offset - 0.5f) * 255.0f * 2.0f));
+           // Debug.Log("offset " + offset + " rcolor " + (255.0 - (offset - 0.5f) * 255.0f * 2.0f));
         }
         // Color color = new Color((int)(offset*255.0f), (int)(255.0 - offset*255.0f), 0);
         // Debug.Log(target_speed);
@@ -187,13 +191,63 @@ public class LoadSkybox : MonoBehaviour
         float tmp = (float)q.Dequeue();
         float cam_y = HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y;
         q.Enqueue(cam_y);
+        qLast = cam_y;
         return System.Math.Abs(cam_y - tmp) * 100/ qLength;
     }
 
-    
+
+    int Direction() {
+        float thres = 1.5f;
+        if(q.Count < qLength) return 0;
+        float qFront = (float)q.Peek();
+        // deal with dangling case
+        if(qFront < 30.0f && qLast > 330.0f) {
+            float tempLast = qLast - 360.0f;
+            if(Mathf.Abs(qFront - tempLast) < thres) return 0;
+            return -1; //turn left
+        } else if (qFront > 330.0f && qLast < 30.0f) {
+            float tempFront = qFront - 360.0f;
+            if(Mathf.Abs(tempFront - qLast) < thres) return 0;
+            return 1; //turn right
+        }
+        //normal case
+        if(Mathf.Abs(qFront - qLast) < thres) return 0; 
+        if(qLast - qFront > thres) return 1; //turn right
+        else if(qFront - qLast > thres) return -1; //turn left
+        return 1;
+    }
+
+    bool JudgeTurnBack() {
+        if(direction == 0) return false;
+        else if(direction > 0) {
+            if(qLast > 180.0f) turnBack = true;
+            else turnBack = false;
+        } else if(direction < 0) {
+            if(qLast < 180.0f) turnBack = false;
+            else turnBack = true;
+        }
+        return turnBack;
+    }
+
+    float CalAmpliFactor(float vel, float lower_bound, float upper_bound, float max_comfort) {
+        vel = Mathf.Abs(vel);
+        float factor;
+        if(0.0f <= vel && vel < speedList[0]) {
+            factor = 2.95f;
+        } else if(vel < speedList[1]) {
+            factor = 2.55f + (speedList[1] - vel) / (speedList[1] - speedList[0]) * (2.95f - 2.55f);
+        } else if(vel < speedList[2]) {
+            factor = 2.22f + (speedList[2] - vel) / (speedList[2] - speedList[1]) * (2.55f - 2.22f);
+        } else {
+            return 2.22f;
+        }
+        return factor;
+    }
 
     void updatePanel()
     {
+        // METHOD.GetComponent<Text>().text = method.ToString(direction + " " + qLast);
+        // Debug.Log("qfront " + q.Peek() + " qlast " + qLast + " " + Direction() + " tb " + turnBack);
         if (count == 0)
         {
             METHOD.GetComponent<Text>().text = method.ToString("0.00");
@@ -208,15 +262,18 @@ public class LoadSkybox : MonoBehaviour
     {
         UpdateMethod();
         speed = CalSpeed();
-        Debug.Log("Current Head Angle is " + HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y);
+        direction = Direction();
+        turnBack = JudgeTurnBack();
+        // Debug.Log("Direction " + direction + " tb " + isTurningBack);
+        //Debug.Log("Current Head Angle is " + HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y);
         plane.GetComponent<Renderer>().material.color = getColor(speedList[targetSpeedIndex], speed);
         
         updatePanel();
         if (speed < 180.0f)
         {
-            Debug.Log("Speed is " + speed);
+            // Debug.Log("Speed is " + speed);
         }
-        Debug.Log("Current Method is " + method);
+        //Debug.Log("Current Method is " + method);
         if (method == -1.0f || method == 0.0f)
         {
             cam.transform.localRotation = Quaternion.Euler(new Vector3(0, 0, 0));
