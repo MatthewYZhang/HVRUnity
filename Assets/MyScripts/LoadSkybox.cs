@@ -188,16 +188,21 @@ public class LoadSkybox : MonoBehaviour
 
     float CalSpeed()
     {
-        float tmp = (float)q.Dequeue();
+        float qFront = (float)q.Dequeue();
         float cam_y = HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y;
         q.Enqueue(cam_y);
         qLast = cam_y;
-        return System.Math.Abs(cam_y - tmp) * 100/ qLength;
+        if(qFront < 30.0f && qLast > 330.0f) {
+            qLast = qLast - 360.0f;
+        } else if (qFront > 330.0f && qLast < 30.0f) {
+            qFront = qFront - 360.0f;
+        }
+        return System.Math.Abs(qLast - qFront) * 100/ qLength;
     }
 
 
     int Direction() {
-        float thres = 1.5f;
+        float thres = 1.0f;
         if(q.Count < qLength) return 0;
         float qFront = (float)q.Peek();
         // deal with dangling case
@@ -223,8 +228,8 @@ public class LoadSkybox : MonoBehaviour
             if(qLast > 180.0f) turnBack = true;
             else turnBack = false;
         } else if(direction < 0) {
-            if(qLast < 180.0f) turnBack = false;
-            else turnBack = true;
+            if(qLast < 180.0f) turnBack = true;
+            else turnBack = false;
         }
         return turnBack;
     }
@@ -246,8 +251,8 @@ public class LoadSkybox : MonoBehaviour
 
     void updatePanel()
     {
-        // METHOD.GetComponent<Text>().text = method.ToString(direction + " " + qLast);
-        // Debug.Log("qfront " + q.Peek() + " qlast " + qLast + " " + Direction() + " tb " + turnBack);
+        METHOD.GetComponent<Text>().text = method.ToString(direction + " tb " + turnBack);
+        Debug.Log("qfront " + q.Peek() + " qlast " + qLast + " " + Direction() + " tb " + turnBack);
         if (count == 0)
         {
             METHOD.GetComponent<Text>().text = method.ToString("0.00");
