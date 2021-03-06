@@ -16,8 +16,10 @@ public class LoadSkybox : MonoBehaviour
     //public GameObject screen;
     public GameObject METHOD;
     public GameObject SPEED;
+    public GameObject ANGLE;
     public Text _methodText;
     public Text _speedText;
+    public Text _angleText;
     public float method = 0.0f;
     bool lastUpdate = false;
     bool tDown;
@@ -25,7 +27,8 @@ public class LoadSkybox : MonoBehaviour
     float lastAngle = 0.0f;
     float speed = 0.0f;
     Queue q;
-    float qLast;
+    Queue vir_view;
+    float qLast, qLLast, vqLast, vqLLast;
     int direction;
     bool turnBack = false;
     const int qLength = 10;
@@ -44,13 +47,15 @@ public class LoadSkybox : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        method = 0.0f;
+        method = 2.0f;
         lastAngle = 0.0f;
         q = new Queue();
+        vir_view = new Queue();
         plane = GameObject.Find("Plane");
         print(plane);
         METHOD = GameObject.Find("methodText");
         SPEED = GameObject.Find("speedText");
+        ANGLE = GameObject.Find("angleText");
         tDown = false;
         tUp = false;
         count = 0;
@@ -58,7 +63,12 @@ public class LoadSkybox : MonoBehaviour
         {
             q.Enqueue(0.0f);
             qLast = 0.0f;
+
+            vir_view.Enqueue(0.0f);
+            vqLast = 0.0f;
         }
+        qLLast = 0.0f;
+        vqLLast = 0.0f;
 
         IControllerHandle controllerHandle = HvrApi.GetControllerHandle();
         if (controllerHandle == null)
@@ -190,32 +200,38 @@ public class LoadSkybox : MonoBehaviour
     {
         float qFront = (float)q.Dequeue();
         float cam_y = HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y;
-        q.Enqueue(cam_y);
-        qLast = cam_y;
-        if(qFront < 30.0f && qLast > 330.0f) {
-            qLast = qLast - 360.0f;
-        } else if (qFront > 330.0f && qLast < 30.0f) {
-            qFront = qFront - 360.0f;
+        if(cam_y > 180.0f) {
+            cam_y = cam_y - 360.0f;
         }
-        return System.Math.Abs(qLast - qFront) * 100/ qLength;
+        q.Enqueue(cam_y);
+        qLLast = qLast;
+        qLast = cam_y;
+        float tempLast = qLast, tempFront = qFront;
+        // if(qFront < 30.0f && qLast > 330.0f) {
+        //     tempLast = qLast - 360.0f;
+        // } else if (qFront > 330.0f && qLast < 30.0f) {
+        //     tempFront = qFront - 360.0f;
+        // }
+        Debug.Log("2 qfront " + q.Peek() + " qlast " + qLast + " " + Direction() + " tb " + turnBack);
+        return System.Math.Abs(tempLast - tempFront) * 100/ qLength;
     }
 
 
     int Direction() {
-        float thres = 1.0f;
+        float thres = 0.5f;
         if(q.Count < qLength) return 0;
         float qFront = (float)q.Peek();
-        // deal with dangling case
-        if(qFront < 30.0f && qLast > 330.0f) {
-            float tempLast = qLast - 360.0f;
-            if(Mathf.Abs(qFront - tempLast) < thres) return 0;
-            return -1; //turn left
-        } else if (qFront > 330.0f && qLast < 30.0f) {
-            float tempFront = qFront - 360.0f;
-            if(Mathf.Abs(tempFront - qLast) < thres) return 0;
-            return 1; //turn right
-        }
-        //normal case
+        // // deal with dangling case
+        // if(qFront < 30.0f && qLast > 330.0f) {
+        //     float tempLast = qLast - 360.0f;
+        //     if(Mathf.Abs(qFront - tempLast) < thres) return 0;
+        //     return -1; //turn left
+        // } else if (qFront > 330.0f && qLast < 30.0f) {
+        //     float tempFront = qFront - 360.0f;
+        //     if(Mathf.Abs(tempFront - qLast) < thres) return 0;
+        //     return 1; //turn right
+        // }
+        // normal case
         if(Mathf.Abs(qFront - qLast) < thres) return 0; 
         if(qLast - qFront > thres) return 1; //turn right
         else if(qFront - qLast > thres) return -1; //turn left
@@ -225,17 +241,20 @@ public class LoadSkybox : MonoBehaviour
     bool JudgeTurnBack() {
         if(direction == 0) return false;
         else if(direction > 0) {
-            if(qLast > 180.0f) turnBack = true;
+            if(qLast < 0.0f) turnBack = true;
             else turnBack = false;
         } else if(direction < 0) {
-            if(qLast < 180.0f) turnBack = true;
+            if(qLast > 0.0f) turnBack = true;
             else turnBack = false;
         }
         return turnBack;
     }
 
-    float CalAmpliFactor(float vel, float lower_bound, float upper_bound, float max_comfort) {
+    float CalAmpliFactor(float vel, float lower_bound=2.22f, float upper_bound=2.55f, float max_comfort=2.95f) {
         vel = Mathf.Abs(vel);
+        if(vel > 200.0f) {
+            return 2.95f;
+        }
         float factor;
         if(0.0f <= vel && vel < speedList[0]) {
             factor = 2.95f;
@@ -251,15 +270,61 @@ public class LoadSkybox : MonoBehaviour
 
     void updatePanel()
     {
-        METHOD.GetComponent<Text>().text = method.ToString(direction + " tb " + turnBack);
+        //METHOD.GetComponent<Text>().text = method.ToString(direction + " tb " + turnBack);
         Debug.Log("qfront " + q.Peek() + " qlast " + qLast + " " + Direction() + " tb " + turnBack);
         if (count == 0)
         {
             METHOD.GetComponent<Text>().text = method.ToString("0.00");
             SPEED.GetComponent<Text>().text = speed.ToString("0.00") + " " + speedList[targetSpeedIndex];
+            ANGLE.GetComponent<Text>().text = (qLast + " " + vqLast);
         }
         count += 1;
         if (count == qLength) count = 0;
+    }
+
+    void VelocityGuided(float vel) {
+        // if(qLLast < 30.0f && qLast > 330.0f) {
+        //     float tempLast = qLast - 360.0f;
+
+        // } else if (qLLast > 330.0f && qLast < 30.0f) {
+        //    // float tempFront = qFront - 360.0f;
+            
+        // }
+        Debug.Log("3 qfront " + q.Peek() + " qlast " + qLast + " " + Direction() + " tb " + turnBack);
+        float lastView = vqLast;
+        if(qLast < 0.0f && vqLast > 100.0f) {
+            lastView = -360.0f + lastView;
+        } else if(qLast > 0.0f && vqLast < -100.0f) {
+            lastView = 360.0f + lastView;
+        }
+
+        // float amp = CalAmpliFactor(vel);
+        // float amp = 2.95f;
+        // if(amp != 2.95f) {
+        //     Debug.Log("error!");
+        // }
+        float amp;
+        if(turnBack) {
+            amp = lastView / qLast;
+        } else {
+            amp = CalAmpliFactor(vel);
+        }
+        float delta = amp * (qLast - qLLast) + lastView - qLast;
+        vqLLast = vqLast;
+        vqLast = qLast + delta;
+
+
+        float temp = vqLast;
+        if(vqLast < 0.0f) temp += 360.0f;
+
+        Vector3 v3 = new Vector3(0, temp - qLast, 0);
+        cam.transform.localRotation = Quaternion.Euler(v3);
+        
+        
+        vir_view.Dequeue();
+        vir_view.Enqueue(vqLast);
+        
+        Debug.Log("qlast and vqlast and Amp " + qLast + " " + vqLast + " " + amp);
     }
 
     // Update is called once per frame
@@ -311,6 +376,7 @@ public class LoadSkybox : MonoBehaviour
         else // method == 5, our method
         {
             Debug.Log("in method 5");
+            VelocityGuided(speed);
             return;
             // implement our method
         }
