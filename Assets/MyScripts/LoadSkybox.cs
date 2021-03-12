@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,31 +9,32 @@ public class LoadSkybox : MonoBehaviour
 {
     public const string RESOURCES_SKYBOX_PATH = "Skybox/Skybox";
     //private IHelmetHandle m_HelmetHandle = null;
-    private IRenderHandle m_RenderHandle = null;
-    private RenderStatistics renderStatics;
+    //private IRenderHandle m_RenderHandle = null;
+    //private RenderStatistics renderStatics;
     public GameObject cam;
     public GameObject plane;
     //public GameObject panel;
     //public GameObject screen;
-    Posture pos;
     public GameObject METHOD;
-    public GameObject SPEED;
-    public GameObject POS;
+    public static GameObject SPEED;
+    public GameObject ANGLE;
     public Text _methodText;
     public Text _speedText;
+    public Text _angleText;
     public float method = 0.0f;
     bool lastUpdate = false;
     bool tDown;
     bool tUp;
     float lastAngle = 0.0f;
     float speed = 0.0f;
-    public static float cam_y;
     Queue q;
-    float qLast;
+    Queue vir_view;
+    float qLast, qLLast, vqLast, vqLLast;
     int direction;
     bool turnBack = false;
-    const int qLength = 10;
-    int renderFrameRate;
+    const int qLength = 5;
+	public static float viewAngle;
+	int renderFrameRate;
     int submitFrameRate;
     // method 0: simple version(1x)
     // method 1: 2x
@@ -42,25 +44,24 @@ public class LoadSkybox : MonoBehaviour
     int count;
 
     protected float[] speedList = { 30.0f, 45.0f, 60.0f };
-    protected float[] colorGainList = { 1.0f, 1.5f, 2.0f };
     int targetSpeedIndex = 0;
 
     public static IController controller;
-    public IHelmetHandle helmetHandle;
+
+    bool firstIn = true;
 
     // Start is called before the first frame update
     void Start()
     {
-        pos = new Posture();
-        method = 0.0f;
+        method = 5.0f;
         lastAngle = 0.0f;
         q = new Queue();
+        vir_view = new Queue();
         plane = GameObject.Find("Plane");
-        //plane.GetComponent<Renderer>().material = new Material(Shader.Find("Transparent/Diffuse"));
         print(plane);
         METHOD = GameObject.Find("methodText");
         SPEED = GameObject.Find("speedText");
-        POS = GameObject.Find("posText");
+        ANGLE = GameObject.Find("angleText");
         tDown = false;
         tUp = false;
         count = 0;
@@ -68,7 +69,12 @@ public class LoadSkybox : MonoBehaviour
         {
             q.Enqueue(0.0f);
             qLast = 0.0f;
+
+            vir_view.Enqueue(0.0f);
+            vqLast = 0.0f;
         }
+        qLLast = 0.0f;
+        vqLLast = 0.0f;
 
         IControllerHandle controllerHandle = HvrApi.GetControllerHandle();
         if (controllerHandle == null)
@@ -93,17 +99,6 @@ public class LoadSkybox : MonoBehaviour
         {
             return;
         }
-        helmetHandle = HvrApi.GetHelmetHandle();
-        if (helmetHandle == null)
-        {
-            Debug.Log("No Helmet Found");
-            return;
-        }
-        /*
-        helmetHandle.SetPositionLock(true);
-        helmetHandle.SetPoseLock(true);
-        */
-        
 
         Material skyboxmat = Resources.Load(RESOURCES_SKYBOX_PATH) as Material;
         if (skyboxmat != null) {
@@ -126,7 +121,7 @@ public class LoadSkybox : MonoBehaviour
             Debug.Log("HelmetHandle is null.");
         }*/
 
-        m_RenderHandle = HvrApi.GetRenderHandle();
+        /*m_RenderHandle = HvrApi.GetRenderHandle();
         if (m_RenderHandle != null)
         {
             Debug.Log("GetRenderHandle Success!");
@@ -134,7 +129,7 @@ public class LoadSkybox : MonoBehaviour
         else
         {
             Debug.Log("RenderHandle is null.");
-        }
+        }*/
     }
 
     bool IsInteger(float m)
@@ -182,7 +177,7 @@ public class LoadSkybox : MonoBehaviour
     }
     private Color getColor(float target_speed, float real_speed)
     {
-        float offset = (target_speed - real_speed) / 26.0f;
+        float offset = (target_speed - real_speed) / target_speed;
         // color = Color.FromArgb((int)offset*255.0, (int)0 - offset*255.0, 0);
         Color color;
         if (Mathf.Abs(offset) < 0.5f)
@@ -200,7 +195,6 @@ public class LoadSkybox : MonoBehaviour
             color = new Color(1.0f, (1.0f - (Mathf.Abs(offset) - 0.5f) * 2.0f), (offset * 2.0f));
            // Debug.Log("offset " + offset + " rcolor " + (255.0 - (offset - 0.5f) * 255.0f * 2.0f));
         }
-        color.a = 0.5f;
         // Color color = new Color((int)(offset*255.0f), (int)(255.0 - offset*255.0f), 0);
         // Debug.Log(target_speed);
         // Debug.Log(real_speed);
@@ -212,14 +206,19 @@ public class LoadSkybox : MonoBehaviour
     {
         float qFront = (float)q.Dequeue();
         float cam_y = HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y;
-        q.Enqueue(cam_y);
-        qLast = cam_y;
-        if(qFront < 30.0f && qLast > 330.0f) {
-            qLast = qLast - 360.0f;
-        } else if (qFront > 330.0f && qLast < 30.0f) {
-            qFront = qFront - 360.0f;
+        if(cam_y > 180.0f) {
+            cam_y = cam_y - 360.0f;
         }
-        return System.Math.Abs(qLast - qFront) * 100/ qLength;
+        q.Enqueue(cam_y);
+        qLLast = qLast;
+        qLast = cam_y;
+        float tempLast = qLast, tempFront = qFront;
+        // if(qFront < 30.0f && qLast > 330.0f) {
+        //     tempLast = qLast - 360.0f;
+        // } else if (qFront > 330.0f && qLast < 30.0f) {
+        //     tempFront = qFront - 360.0f;
+        // }
+        return System.Math.Abs(tempLast - tempFront) * 100/ qLength;
     }
 
 
@@ -227,17 +226,17 @@ public class LoadSkybox : MonoBehaviour
         float thres = 1.0f;
         if(q.Count < qLength) return 0;
         float qFront = (float)q.Peek();
-        // deal with dangling case
-        if(qFront < 30.0f && qLast > 330.0f) {
-            float tempLast = qLast - 360.0f;
-            if(Mathf.Abs(qFront - tempLast) < thres) return 0;
-            return -1; //turn left
-        } else if (qFront > 330.0f && qLast < 30.0f) {
-            float tempFront = qFront - 360.0f;
-            if(Mathf.Abs(tempFront - qLast) < thres) return 0;
-            return 1; //turn right
-        }
-        //normal case
+        // // deal with dangling case
+        // if(qFront < 30.0f && qLast > 330.0f) {
+        //     float tempLast = qLast - 360.0f;
+        //     if(Mathf.Abs(qFront - tempLast) < thres) return 0;
+        //     return -1; //turn left
+        // } else if (qFront > 330.0f && qLast < 30.0f) {
+        //     float tempFront = qFront - 360.0f;
+        //     if(Mathf.Abs(tempFront - qLast) < thres) return 0;
+        //     return 1; //turn right
+        // }
+        // normal case
         if(Mathf.Abs(qFront - qLast) < thres) return 0; 
         if(qLast - qFront > thres) return 1; //turn right
         else if(qFront - qLast > thres) return -1; //turn left
@@ -247,26 +246,29 @@ public class LoadSkybox : MonoBehaviour
     bool JudgeTurnBack() {
         if(direction == 0) return false;
         else if(direction > 0) {
-            if(qLast > 180.0f) turnBack = true;
+            if(qLast < 0.0f) turnBack = true;
             else turnBack = false;
         } else if(direction < 0) {
-            if(qLast < 180.0f) turnBack = true;
+            if(qLast > 0.0f) turnBack = true;
             else turnBack = false;
         }
         return turnBack;
     }
 
-    float CalAmpliFactor(float vel, float lower_bound, float upper_bound, float max_comfort) {
+    float CalAmpliFactor(float vel, float lower_bound=2.22f, float upper_bound=2.55f, float max_comfort=2.95f) {
         vel = Mathf.Abs(vel);
+        if(vel > 200.0f) {
+            return 2.72f;
+        }
         float factor;
         if(0.0f <= vel && vel < speedList[0]) {
-            factor = 2.95f;
+            factor = 2.72f;
         } else if(vel < speedList[1]) {
-            factor = 2.55f + (speedList[1] - vel) / (speedList[1] - speedList[0]) * (2.95f - 2.55f);
+            factor = 2.40f + (speedList[1] - vel) / (speedList[1] - speedList[0]) * (2.72f - 2.40f);
         } else if(vel < speedList[2]) {
-            factor = 2.22f + (speedList[2] - vel) / (speedList[2] - speedList[1]) * (2.55f - 2.22f);
+            factor = 2.20f + (speedList[2] - vel) / (speedList[2] - speedList[1]) * (2.40f - 2.20f);
         } else {
-            return 2.22f;
+            factor = 2.20f;
         }
         return factor;
     }
@@ -274,85 +276,169 @@ public class LoadSkybox : MonoBehaviour
     void updatePanel()
     {
         //METHOD.GetComponent<Text>().text = method.ToString(direction + " tb " + turnBack);
-        Debug.Log("qfront " + q.Peek() + " qlast " + qLast + " " + Direction() + " tb " + turnBack);
+        //Debug.Log("qfront " + q.Peek() + " qlast " + qLast + " " + Direction() + " tb " + turnBack);
         if (count == 0)
         {
-            METHOD.GetComponent<Text>().text = method.ToString("0.0");
-            SPEED.GetComponent<Text>().text = speed.ToString("0.00") + " " + speedList[targetSpeedIndex];
-            
-            
+            METHOD.GetComponent<Text>().text = method.ToString("0.00");
+            //SPEED.GetComponent<Text>().text = speed.ToString("0.00") + " " + speedList[targetSpeedIndex];
+            ANGLE.GetComponent<Text>().text = (qLast.ToString("0.00") + " " + vqLast.ToString("0.00") + " " + viewAngle.ToString("0.0"));
         }
         count += 1;
         if (count == qLength) count = 0;
     }
 
+    void Twominuscosine() {
+        float alpha = (float)Math.Cos(qLast * Math.PI/180.0d);
+        float target_angle = (2.0f - alpha) * qLast;
+        float delta = target_angle - qLast;
+        Vector3 v3 = new Vector3(0, delta, 0);
+        cam.transform.localRotation = Quaternion.Euler(v3);
+		viewAngle = target_angle;
+    }
+
+    void Quadratic() {
+        float amp = 1.0f + 0.06666f * Mathf.Abs(qLast) - 0.000740740f * qLast * qLast;
+        float lastView = vqLast;
+        if(qLast < 0.0f && vqLast > 100.0f) {
+            lastView = -360.0f + lastView;
+        } else if(qLast > 0.0f && vqLast < -100.0f) {
+            lastView = 360.0f + lastView;
+        }
+
+        float delta = amp * (qLast - qLLast) + lastView - qLast;
+        vqLLast = vqLast;
+        vqLast = qLast + delta;
+
+        float temp = vqLast;
+        if(vqLast < 0.0f) temp += 360.0f;
+
+        Vector3 v3 = new Vector3(0, temp - qLast, 0);
+        cam.transform.localRotation = Quaternion.Euler(v3);
+        
+        vir_view.Dequeue();
+        vir_view.Enqueue(vqLast);
+		viewAngle = vqLast;
+    }
+
+    void VelocityGuided(float vel) {
+        // if(qLLast < 30.0f && qLast > 330.0f) {
+        //     float tempLast = qLast - 360.0f;
+
+        // } else if (qLLast > 330.0f && qLast < 30.0f) {
+        //    // float tempFront = qFront - 360.0f;
+            
+        // }
+        float lastView = vqLast;
+        if(qLast < 0.0f && vqLast > 100.0f) {
+            lastView = -360.0f + lastView;
+        } else if(qLast > 0.0f && vqLast < -100.0f) {
+            lastView = 360.0f + lastView;
+        }
+
+        // float amp = CalAmpliFactor(vel);
+        // float amp = 2.95f;
+        // if(amp != 2.95f) {
+        //     Debug.Log("error!");
+        // }
+        float amp;
+        if(turnBack) {
+            amp = lastView / qLast;
+        } else {
+            amp = CalAmpliFactor(vel);
+            //amp = 2.0f;
+        }
+        float delta = amp * (qLast - qLLast) + lastView - qLast;
+        Debug.Log("delta " + delta + " lastview " + lastView);
+        vqLLast = vqLast;
+
+        if(Mathf.Abs(qLast) < 2.0f) {
+            vqLast = qLast;
+        } else {
+            vqLast = qLast + delta;
+        }
+        
+        float temp = vqLast;
+        if(vqLast < 0.0f) temp += 360.0f;
+
+        Vector3 v3 = new Vector3(0, temp - qLast, 0);
+        cam.transform.localRotation = Quaternion.Euler(v3);
+        
+        
+        vir_view.Dequeue();
+        vir_view.Enqueue(vqLast);
+		viewAngle = vqLast;
+    }
+
     // Update is called once per frame
     void FixedUpdate()
     {
+        if(firstIn) {
+            firstIn = false;
+            return;
+        }
         UpdateMethod();
         speed = CalSpeed();
         direction = Direction();
         turnBack = JudgeTurnBack();
+        Debug.Log("qfront " + q.Peek() + " qlast " + qLast + " vqlast " + vqLast + " "+ Direction() + " tb " + turnBack);
         // Debug.Log("Direction " + direction + " tb " + isTurningBack);
         //Debug.Log("Current Head Angle is " + HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y);
-        plane.GetComponent<Renderer>().material.color = getColor(speedList[targetSpeedIndex], speed);
+        //plane.GetComponent<Renderer>().material.color = getColor(speedList[targetSpeedIndex], speed);
         
-
         updatePanel();
         if (speed < 180.0f)
         {
             // Debug.Log("Speed is " + speed);
         }
+		
         //Debug.Log("Current Method is " + method);
-        cam_y = HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y;
         if (method == -1.0f || method == 0.0f)
         {
             cam.transform.localRotation = Quaternion.Euler(new Vector3(0, 0, 0));
+            return;
         }
-        else if (method < 5)
+        if (method < 3)
         {
-            if (IsInteger(method))
+			float cam_y = HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y;
+            //if (IsInteger(method))
             {
                 Vector3 v3 = new Vector3(0, method * cam_y, 0);
-                cam_y = (method+1) * cam_y % 360f;
+				viewAngle = (method+1) * cam_y % 360f;
                 cam.transform.localRotation = Quaternion.Euler(v3);
             }
-            else
-            {
-                if (cam_y <= 180.0f)
-                {
-                    Vector3 v3 = new Vector3(0, method * cam_y, 0);
-                    cam_y = (method+1) * cam_y;
-                    cam.transform.localRotation = Quaternion.Euler(v3);
-                }
-                else
-                {
-                    Vector3 v3 = new Vector3(0, method * (cam_y - 360.0f), 0);
-                    cam_y = 360f - (method+1) * (360f - cam_y);
-                    cam.transform.localRotation = Quaternion.Euler(v3);
-                }
-            }
+            // else
+            // {
+            //     if (cam_y <= 180.0f)
+            //     {
+            //         Vector3 v3 = new Vector3(0, method * cam_y, 0);
+            //         cam.transform.localRotation = Quaternion.Euler(v3);
+            //     }
+            //     else
+            //     {
+            //         Vector3 v3 = new Vector3(0, method * (cam_y - 360.0f), 0);
+            //         cam.transform.localRotation = Quaternion.Euler(v3);
+            //     }
+            // }
         }
-        else // method == 5, our method
+		else if (method == 3f) // 
+		{
+			Debug.Log("Quadratic");
+			Quadratic();
+		}
+		else if (method == 4f) // 2-cos
+		{
+			Debug.Log("Cosine");
+			Twominuscosine();
+		}
+        else if (method == 5f)// method == 5, our method
         {
             Debug.Log("in method 5");
+            VelocityGuided(speed);
+            //Quadratic();
+            //Twominuscosine();
             return;
             // implement our method
         }
-
-
-        //int ret = helmetHandle.GetPosture(ref pos);
-        /*
-        if (ret == 0)
-        {
-
-            Quaternion quatDat;
-            Vector3 posDat;
-            quatDat = pos.rotation; //获取旋转姿态信息
-            posDat = pos.position; //获取位置信息
-            Debug.Log("Using Pos: " + quatDat + " " + posDat);
-        }
-        */
         /*Posture pos = new Posture ();
         int ret = m_HelmetHandle.GetPosture (ref pos);
         if (ret == 0) {
@@ -365,17 +451,11 @@ public class LoadSkybox : MonoBehaviour
 　　      Debug.Log ("Get VR glass posture failed!");
         }*/
 
-        /*
-      m_RenderHandle.GetRenderStatics(ref renderStatics);
-　　  submitFrameRate = (int)renderStatics.SubmitFrameRate; //提交帧率
-　　  renderFrameRate = (int)renderStatics.RenderFrameRate; //渲染帧率
-        POS.GetComponent<Text>().text = renderFrameRate + " " + submitFrameRate;
+        /*m_RenderHandle.GetRenderStatics(ref renderStatics);
+　　  int submiteFrameRate = (int)renderStatics.SubmitFrameRate; //提交帧率
+　　  int renderFrameRate = (int)renderStatics.RenderFrameRate; //渲染帧率
         Debug.Log(renderStatics.RenderFrameRate);
 
-        Debug.Log(Time.deltaTime);
-        */
-
-
-        
+        Debug.Log(Time.deltaTime);*/
     }
 }
