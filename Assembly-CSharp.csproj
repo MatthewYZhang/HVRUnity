@@ -84,6 +84,7 @@
     <Compile Include="Assets\HVRController\Scripts\HVRRayCasterBase.cs" />
     <Compile Include="Assets\HVRController\Scripts\HVRTouchPad.cs" />
     <Compile Include="Assets\HVRController\Scripts\IHVRHoverHandle.cs" />
+    <Compile Include="Assets\MyScripts\GenerateBall.cs" />
     <Compile Include="Assets\MyScripts\LoadSkybox.cs" />
     <Compile Include="Assets\NOLOController\Scripts\NOLOControllerAnimator.cs" />
     <Compile Include="Assets\NOLOController\Scripts\NOLOTouchPad.cs" />

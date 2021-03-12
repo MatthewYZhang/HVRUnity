@@ -8,14 +8,16 @@ public class LoadSkybox : MonoBehaviour
 {
     public const string RESOURCES_SKYBOX_PATH = "Skybox/Skybox";
     //private IHelmetHandle m_HelmetHandle = null;
-    //private IRenderHandle m_RenderHandle = null;
-    //private RenderStatistics renderStatics;
+    private IRenderHandle m_RenderHandle = null;
+    private RenderStatistics renderStatics;
     public GameObject cam;
     public GameObject plane;
     //public GameObject panel;
     //public GameObject screen;
+    Posture pos;
     public GameObject METHOD;
     public GameObject SPEED;
+    public GameObject POS;
     public Text _methodText;
     public Text _speedText;
     public float method = 0.0f;
@@ -24,11 +26,14 @@ public class LoadSkybox : MonoBehaviour
     bool tUp;
     float lastAngle = 0.0f;
     float speed = 0.0f;
+    public static float cam_y;
     Queue q;
     float qLast;
     int direction;
     bool turnBack = false;
     const int qLength = 10;
+    int renderFrameRate;
+    int submitFrameRate;
     // method 0: simple version(1x)
     // method 1: 2x
     // method 2: 3x
@@ -36,21 +41,26 @@ public class LoadSkybox : MonoBehaviour
     // method 4: our method
     int count;
 
-    protected float[] speedList = { 28.0f, 45.0f, 70.0f };
+    protected float[] speedList = { 30.0f, 45.0f, 60.0f };
+    protected float[] colorGainList = { 1.0f, 1.5f, 2.0f };
     int targetSpeedIndex = 0;
 
-    public IController controller;
+    public static IController controller;
+    public IHelmetHandle helmetHandle;
 
     // Start is called before the first frame update
     void Start()
     {
+        pos = new Posture();
         method = 0.0f;
         lastAngle = 0.0f;
         q = new Queue();
         plane = GameObject.Find("Plane");
+        //plane.GetComponent<Renderer>().material = new Material(Shader.Find("Transparent/Diffuse"));
         print(plane);
         METHOD = GameObject.Find("methodText");
         SPEED = GameObject.Find("speedText");
+        POS = GameObject.Find("posText");
         tDown = false;
         tUp = false;
         count = 0;
@@ -83,6 +93,17 @@ public class LoadSkybox : MonoBehaviour
         {
             return;
         }
+        helmetHandle = HvrApi.GetHelmetHandle();
+        if (helmetHandle == null)
+        {
+            Debug.Log("No Helmet Found");
+            return;
+        }
+        /*
+        helmetHandle.SetPositionLock(true);
+        helmetHandle.SetPoseLock(true);
+        */
+        
 
         Material skyboxmat = Resources.Load(RESOURCES_SKYBOX_PATH) as Material;
         if (skyboxmat != null) {
@@ -105,7 +126,7 @@ public class LoadSkybox : MonoBehaviour
             Debug.Log("HelmetHandle is null.");
         }*/
 
-        /*m_RenderHandle = HvrApi.GetRenderHandle();
+        m_RenderHandle = HvrApi.GetRenderHandle();
         if (m_RenderHandle != null)
         {
             Debug.Log("GetRenderHandle Success!");
@@ -113,7 +134,7 @@ public class LoadSkybox : MonoBehaviour
         else
         {
             Debug.Log("RenderHandle is null.");
-        }*/
+        }
     }
 
     bool IsInteger(float m)
@@ -161,7 +182,7 @@ public class LoadSkybox : MonoBehaviour
     }
     private Color getColor(float target_speed, float real_speed)
     {
-        float offset = (target_speed - real_speed) / target_speed;
+        float offset = (target_speed - real_speed) / 26.0f;
         // color = Color.FromArgb((int)offset*255.0, (int)0 - offset*255.0, 0);
         Color color;
         if (Mathf.Abs(offset) < 0.5f)
@@ -179,6 +200,7 @@ public class LoadSkybox : MonoBehaviour
             color = new Color(1.0f, (1.0f - (Mathf.Abs(offset) - 0.5f) * 2.0f), (offset * 2.0f));
            // Debug.Log("offset " + offset + " rcolor " + (255.0 - (offset - 0.5f) * 255.0f * 2.0f));
         }
+        color.a = 0.5f;
         // Color color = new Color((int)(offset*255.0f), (int)(255.0 - offset*255.0f), 0);
         // Debug.Log(target_speed);
         // Debug.Log(real_speed);
@@ -251,12 +273,14 @@ public class LoadSkybox : MonoBehaviour
 
     void updatePanel()
     {
-        METHOD.GetComponent<Text>().text = method.ToString(direction + " tb " + turnBack);
+        //METHOD.GetComponent<Text>().text = method.ToString(direction + " tb " + turnBack);
         Debug.Log("qfront " + q.Peek() + " qlast " + qLast + " " + Direction() + " tb " + turnBack);
         if (count == 0)
         {
-            METHOD.GetComponent<Text>().text = method.ToString("0.00");
+            METHOD.GetComponent<Text>().text = method.ToString("0.0");
             SPEED.GetComponent<Text>().text = speed.ToString("0.00") + " " + speedList[targetSpeedIndex];
+            
+            
         }
         count += 1;
         if (count == qLength) count = 0;
@@ -273,25 +297,24 @@ public class LoadSkybox : MonoBehaviour
         //Debug.Log("Current Head Angle is " + HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y);
         plane.GetComponent<Renderer>().material.color = getColor(speedList[targetSpeedIndex], speed);
         
+
         updatePanel();
         if (speed < 180.0f)
         {
             // Debug.Log("Speed is " + speed);
         }
         //Debug.Log("Current Method is " + method);
+        cam_y = HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y;
         if (method == -1.0f || method == 0.0f)
         {
             cam.transform.localRotation = Quaternion.Euler(new Vector3(0, 0, 0));
-            return;
         }
-        if (method < 5)
+        else if (method < 5)
         {
-            float cam_y = HVRLayoutCore.m_CamCtrObj.transform.localRotation.eulerAngles.y;
-            
-            
             if (IsInteger(method))
             {
                 Vector3 v3 = new Vector3(0, method * cam_y, 0);
+                cam_y = (method+1) * cam_y % 360f;
                 cam.transform.localRotation = Quaternion.Euler(v3);
             }
             else
@@ -299,11 +322,13 @@ public class LoadSkybox : MonoBehaviour
                 if (cam_y <= 180.0f)
                 {
                     Vector3 v3 = new Vector3(0, method * cam_y, 0);
+                    cam_y = (method+1) * cam_y;
                     cam.transform.localRotation = Quaternion.Euler(v3);
                 }
                 else
                 {
                     Vector3 v3 = new Vector3(0, method * (cam_y - 360.0f), 0);
+                    cam_y = 360f - (method+1) * (360f - cam_y);
                     cam.transform.localRotation = Quaternion.Euler(v3);
                 }
             }
@@ -314,6 +339,20 @@ public class LoadSkybox : MonoBehaviour
             return;
             // implement our method
         }
+
+
+        //int ret = helmetHandle.GetPosture(ref pos);
+        /*
+        if (ret == 0)
+        {
+
+            Quaternion quatDat;
+            Vector3 posDat;
+            quatDat = pos.rotation; //获取旋转姿态信息
+            posDat = pos.position; //获取位置信息
+            Debug.Log("Using Pos: " + quatDat + " " + posDat);
+        }
+        */
         /*Posture pos = new Posture ();
         int ret = m_HelmetHandle.GetPosture (ref pos);
         if (ret == 0) {
@@ -326,11 +365,17 @@ public class LoadSkybox : MonoBehaviour
 　　      Debug.Log ("Get VR glass posture failed!");
         }*/
 
-        /*m_RenderHandle.GetRenderStatics(ref renderStatics);
-　　  int submiteFrameRate = (int)renderStatics.SubmitFrameRate; //提交帧率
-　　  int renderFrameRate = (int)renderStatics.RenderFrameRate; //渲染帧率
+        /*
+      m_RenderHandle.GetRenderStatics(ref renderStatics);
+　　  submitFrameRate = (int)renderStatics.SubmitFrameRate; //提交帧率
+　　  renderFrameRate = (int)renderStatics.RenderFrameRate; //渲染帧率
+        POS.GetComponent<Text>().text = renderFrameRate + " " + submitFrameRate;
         Debug.Log(renderStatics.RenderFrameRate);
 
-        Debug.Log(Time.deltaTime);*/
+        Debug.Log(Time.deltaTime);
+        */
+
+
+        
     }
 }
